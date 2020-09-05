@@ -1,12 +1,8 @@
 use byte_slice_cast::*;
-use cpal::traits::StreamTrait;
-use cpal::{
-    traits::{DeviceTrait, HostTrait},
-    SampleFormat,
-};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::net::UdpSocket;
 
-const MAX_SAMPLES_PER_PACKET: usize = 512;
+include!("../../config.rs");
 
 fn main() {
     let host = cpal::default_host();
@@ -18,24 +14,28 @@ fn main() {
         .supported_input_configs()
         .expect("error while querying formats");
     let input_format = input_supported_formats_range
-        .find(|f| f.sample_format() == SampleFormat::I16 && f.channels() == 1)
+        .find(|f| f.sample_format() == config::SAMPLE_FORMAT && f.channels() == 1)
         .expect("no supported format?!")
-        .with_sample_rate(cpal::SampleRate(48_000));
+        .with_sample_rate(cpal::SampleRate(config::SAMPLE_RATE as _));
 
-    let port = 13337;
-    let socket = UdpSocket::bind(("0.0.0.0", 12345)).unwrap();
+    let socket =
+        UdpSocket::bind((config::TRANSMITTER_BIND_ADDR, config::TRANSMITTER_BIND_PORT)).unwrap();
     socket.set_broadcast(true).unwrap();
 
     let input_config = input_format.into();
     let stream = input_device
         .build_input_stream(
             &input_config,
-            move |data: &[i16], _info| {
+            move |data: &[config::Sample], _info| {
                 //println!("Got a buffer of size {}", data.len());
-                for data in data.chunks(MAX_SAMPLES_PER_PACKET) {
+                for data in
+                    data.chunks(config::MAX_PACKET_SIZE / std::mem::size_of::<config::Sample>())
+                {
                     let bytes = data.as_byte_slice();
                     //println!("Sending call, {} bytes", bytes.len());
-                    let n = socket.send_to(&bytes, ("255.255.255.255", port)).unwrap();
+                    let n = socket
+                        .send_to(&bytes, ("255.255.255.255", config::TRANSMISSION_PORT))
+                        .unwrap();
                     if n != bytes.len() {
                         panic!("Sent the wrong number of bytes {}", n);
                     } else {

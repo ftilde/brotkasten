@@ -1,19 +1,13 @@
 use byte_slice_cast::*;
-use cpal::traits::StreamTrait;
-use cpal::{
-    traits::{DeviceTrait, HostTrait},
-    SampleFormat,
-};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::net::UdpSocket;
 
-type Sample = i16;
-const MAX_SAMPLES_PER_PACKET: usize = 512;
-const SINGLE_SAMPLE_SIZE: usize = std::mem::size_of::<Sample>();
-const MAX_PACKET_SIZE: usize = MAX_SAMPLES_PER_PACKET * SINGLE_SAMPLE_SIZE;
-const SAMPLE_RATE: usize = 48000;
+include!("../../config.rs");
+
+const SINGLE_SAMPLE_SIZE: usize = std::mem::size_of::<config::Sample>();
 
 #[repr(C, align(2))] //Depends on Sample!!
-struct PacketBuffer([u8; MAX_PACKET_SIZE]);
+struct PacketBuffer([u8; config::MAX_PACKET_SIZE]);
 
 fn main() {
     let host = cpal::default_host();
@@ -25,14 +19,13 @@ fn main() {
         .supported_output_configs()
         .expect("error while querying formats");
     let output_format = output_supported_formats_range
-        .find(|f| f.sample_format() == SampleFormat::I16 && f.channels() == 1)
+        .find(|f| f.sample_format() == config::SAMPLE_FORMAT && f.channels() == 1)
         .expect("no supported format?!")
-        .with_sample_rate(cpal::SampleRate(SAMPLE_RATE as _));
+        .with_sample_rate(cpal::SampleRate(config::SAMPLE_RATE as _));
 
     let output_config = output_format.into();
 
-    let port = 13337;
-    let socket = UdpSocket::bind(("0.0.0.0", port)).unwrap();
+    let socket = UdpSocket::bind((config::RECEIVER_BIND_ADDR, config::TRANSMISSION_PORT)).unwrap();
     socket.set_nonblocking(true).unwrap();
 
     let mut recv_buf = unsafe { std::mem::zeroed::<PacketBuffer>() };
@@ -41,10 +34,10 @@ fn main() {
     let stream = output_device
         .build_output_stream(
             &output_config,
-            move |data: &mut [Sample], _info| {
+            move |data: &mut [config::Sample], _info| {
                 let mut data_pos = 0;
                 loop {
-                    let recv_data = &recv_buf.0[..].as_slice_of::<Sample>().unwrap();
+                    let recv_data = &recv_buf.0[..].as_slice_of::<config::Sample>().unwrap();
                     while recv_data_pos < num_received {
                         if data_pos == data.len() {
                             return;

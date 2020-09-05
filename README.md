@@ -10,8 +10,14 @@ The transmitter collects samples from the first audio input device found by `cpa
 $ cd transmitter && cargo run --release
 ```
 
-## receiver collects samples on `0.0.0.0:12345` and plays them on the first audio output device that it finds.
+## Receiver
+
+receiver collects samples on `0.0.0.0:12345` and plays them on the first audio output device that it finds.
 
 ```
 $ cd receiver && cargo run --release
 ```
+
+## Configuration
+
+Just edit `config.rs` and rebuild.
